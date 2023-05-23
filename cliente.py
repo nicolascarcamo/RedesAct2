@@ -1,16 +1,30 @@
 import socket
 import sys 
+import tcp_class
 
+HEADER_SIZE = 18
+BYTES_TO_RECEIVE = 16
+TOTAL_BYTES = HEADER_SIZE + BYTES_TO_RECEIVE
+ACTUAL_SEQ = "001"
 #Create a client that communicates through an UDP socket with "server.py" file in the same directory
 #Client will recieve an adress, port as its first two arguments and a file through standard input
 #Client will send the file to the server in chunks of 16 bytes
 #The server will receive the file and print it to standard output
 
-#Create a UDP socket
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+#Create a TCP object
+tcp = tcp_class.SocketTCP()
 
-#Get the server address and port from the command line
-server_address = (sys.argv[1], int(sys.argv[2]))
+#Set the address and port
+tcp.set_address(sys.argv[1])
+tcp.set_port(int(sys.argv[2]))
+
+SERVER_ADDRESS = (sys.argv[1], int(sys.argv[2]))
+
+#Initialize the socket
+tcp.init_socket()
+
+#Connect to the server
+tcp.connect()
 
 #Send the file to the server in chunks of 16 bytes, until the file is empty
 #The client will wait for an ACK from the server before sending the next chunk
@@ -21,25 +35,55 @@ try:
     #Open the file received from standard input using stdin
     file = sys.stdin
     #Read the file
-    data = file.read(16)
+    file_data = file.read(16)
     #Send the file
-    while data:
-        #Send the data
-        sent = sock.sendto(data.encode(), server_address)
-        print('sent {} bytes to {}'.format(sent, server_address))
-        #Wait for an ACK
-        ackn, address = sock.recvfrom(4096)
-        print('received {} bytes from {}'.format(len(ackn), address))
-        print(ackn.decode())
-        #If the ACK is empty, close the socket
-        if not ackn:
-            print('closing socket')
-            sock.close()
-            break
-        #If the ACK is not empty, read the next chunk
-        data = file.read(16)
+    while file_data:
+
+        #Create a segment with SYN and SEQ headers with the sequence number of the chunk using the "create_segment" function
+        #SEQ format is "001" for the first chunk, "002" for the second, etc.
+        segment = tcp.create_segment([1, 0, 0], ACTUAL_SEQ, file_data)
+        
+        #Send the segment to the server
+        tcp.sock.sendto(segment.encode(), SERVER_ADDRESS)
+        print('sent {} bytes to {}'.format(len(segment), (tcp.address, tcp.port)))
+
+        #Parse server response and get check if it is an ACK
+        server_data, address = tcp.recieve(HEADER_SIZE)
+        print('+')
+        header, seq, text_data = tcp.parse_segment(server_data.decode())
+        if header[1] == "1":
+            print("ACK")
+        else:
+            print("NACK")
+        #If the server response is not an ACK, resend the segment
+        #If the server response is an ACK, read the next chunk
+        #If the client doesn't receive an ACK after 3 tries, it will close the socket
+        tries = 1
+        while header[1] != "1":
+            if tries == 3:
+                print("Closing socket")
+                tcp.close_socket()
+                break
+            tcp.sock.sendto(segment.encode(), SERVER_ADDRESS)
+            print('sent {} bytes to {}'.format(len(segment), (tcp.address, tcp.port)))
+            server_data, address = tcp.receive(HEADER_SIZE)
+            header, seq, text_data = tcp.parse_segment(server_data.decode())
+            if header[1] == "1":
+                print("ACK")
+            else:
+                print("NACK")
+            tries += 1
+        
+        #Read the next chunk
+        file_data = file.read(16)
+
+        #Iterate the sequence number
+        ACTUAL_SEQ = tcp.iterate_seq(ACTUAL_SEQ)
+        
+finally:
     #Close the file
     file.close()
-finally:
+
+    #Close the socket
     print('closing socket')
-    sock.close()
+    tcp.close_socket()

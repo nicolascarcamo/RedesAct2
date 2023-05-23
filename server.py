@@ -1,35 +1,52 @@
 import socket
+import tcp_class
 
+HEADER_SIZE = 18
+BYTES_TO_RECEIVE = 16
+TOTAL_BYTES = HEADER_SIZE + BYTES_TO_RECEIVE
 ADDRESS = 'localhost'
-PORT = 8000
+PORT = 8009
 
-#Create an UDP socket 
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+#Create a TCP object
+tcp = tcp_class.SocketTCP()
 
-#Bind the socket to the port
-server_address = (ADDRESS, PORT)
+#Set the address and port
+tcp.set_address(ADDRESS)
+tcp.set_port(PORT)
 
-print('starting up on {} port {}'.format(*server_address))
+#Initialize the socket
+tcp.init_socket()
 
-sock.bind(server_address)
+#Bind the socket
+tcp.bind_socket()
+
 
 #Client will send a file to the server in chunks of 16 bytes
 #The server will receive the file and print it to standard output
 while True:
-    print('waiting to receive message')
-    data, address = sock.recvfrom(4096)
 
-    print('received {} bytes from {}'.format(len(data), address))
-    print(data.decode())
+    #Wait for a connection
+    print('waiting for packet...')
 
+    #Receive data from the client
+    whole_data, address = tcp.recieve(TOTAL_BYTES)
+
+    #Parse the segment
+    header, seq, data = tcp.parse_segment(whole_data.decode())
+    print(header, seq, data)
+    print('------------------')
     if data:
+        print('received {} bytes from {}'.format(len(whole_data), (tcp.address, tcp.port)))
+        #Create a segment with ACK header with the sequence number of the received segment using the "create_segment" function
+        segment = tcp.create_segment([0, 1, 0], seq, "")
+
         #Acknowledge the client
-        ackn = 'ACK'
-        sent = sock.sendto(ackn.encode(), address)
-        print('sent {} bytes back to {}'.format(sent, address))
+        tcp.sock.sendto(segment.encode(), address)
+        print('sent {} bytes back to {}'.format(len(segment), ADDRESS))
+        
     
     #If the client sends an empty message, the server will close the socket
     if not data:
         print('closing socket')
-        sock.close()
+        tcp.close_socket()
         break
