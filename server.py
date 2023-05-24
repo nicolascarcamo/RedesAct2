@@ -5,20 +5,26 @@ HEADER_SIZE = 18
 BYTES_TO_RECEIVE = 16
 TOTAL_BYTES = HEADER_SIZE + BYTES_TO_RECEIVE
 ADDRESS = 'localhost'
-PORT = 8009
+INITIAL_PORT = 8000
 
-#Create a TCP object
-tcp = tcp_class.SocketTCP()
+#Create a TCP object to establish a connection with the client
+initial_tcp = tcp_class.SocketTCP()
 
 #Set the address and port
-tcp.set_address(ADDRESS)
-tcp.set_port(PORT)
+initial_tcp.set_address(ADDRESS)
+initial_tcp.set_port(INITIAL_PORT)
 
 #Initialize the socket
-tcp.init_socket()
+initial_tcp.init_socket()
 
 #Bind the socket
-tcp.bind_socket()
+initial_tcp.bind_socket()
+
+print('starting up on {} port {}'.format(initial_tcp.address, initial_tcp.port))
+
+#Use the accept function to accept a connection from the client from the three-way handshake
+tcp, new_address = initial_tcp.accept()
+print('accepted connection and listening at {} port {}'.format(new_address[0], new_address[1]))
 
 
 #Client will send a file to the server in chunks of 16 bytes

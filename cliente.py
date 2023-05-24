@@ -5,7 +5,10 @@ import tcp_class
 HEADER_SIZE = 18
 BYTES_TO_RECEIVE = 16
 TOTAL_BYTES = HEADER_SIZE + BYTES_TO_RECEIVE
-ACTUAL_SEQ = "001"
+
+SERVER_ADDRESS = ('localhost', 8000)
+NEW_SERVER_ADDRESS = (sys.argv[1], int(sys.argv[2]))
+
 #Create a client that communicates through an UDP socket with "server.py" file in the same directory
 #Client will recieve an adress, port as its first two arguments and a file through standard input
 #Client will send the file to the server in chunks of 16 bytes
@@ -16,15 +19,15 @@ tcp = tcp_class.SocketTCP()
 
 #Set the address and port
 tcp.set_address(sys.argv[1])
-tcp.set_port(int(sys.argv[2]))
-
-SERVER_ADDRESS = (sys.argv[1], int(sys.argv[2]))
+tcp.set_port(sys.argv[2])
 
 #Initialize the socket
 tcp.init_socket()
 
-#Connect to the server
-tcp.connect()
+#Use connect function to connect to the server using the address and port
+#Connect function will start the three-way handshake
+new_address = tcp.connect(SERVER_ADDRESS)
+print("Connected to server at " + str(new_address))
 
 #Send the file to the server in chunks of 16 bytes, until the file is empty
 #The client will wait for an ACK from the server before sending the next chunk
@@ -41,10 +44,10 @@ try:
 
         #Create a segment with SYN and SEQ headers with the sequence number of the chunk using the "create_segment" function
         #SEQ format is "001" for the first chunk, "002" for the second, etc.
-        segment = tcp.create_segment([1, 0, 0], ACTUAL_SEQ, file_data)
+        segment = tcp.create_segment([1, 0, 0], tcp.seq, file_data)
         
         #Send the segment to the server
-        tcp.sock.sendto(segment.encode(), SERVER_ADDRESS)
+        tcp.sock.sendto(segment.encode(), NEW_SERVER_ADDRESS)
         print('sent {} bytes to {}'.format(len(segment), (tcp.address, tcp.port)))
 
         #Parse server response and get check if it is an ACK
@@ -64,7 +67,7 @@ try:
                 print("Closing socket")
                 tcp.close_socket()
                 break
-            tcp.sock.sendto(segment.encode(), SERVER_ADDRESS)
+            tcp.sock.sendto(segment.encode(), NEW_SERVER_ADDRESS)
             print('sent {} bytes to {}'.format(len(segment), (tcp.address, tcp.port)))
             server_data, address = tcp.receive(HEADER_SIZE)
             header, seq, text_data = tcp.parse_segment(server_data.decode())
@@ -78,8 +81,7 @@ try:
         file_data = file.read(16)
 
         #Iterate the sequence number
-        ACTUAL_SEQ = tcp.iterate_seq(ACTUAL_SEQ)
-        
+        tcp.seq 
 finally:
     #Close the file
     file.close()

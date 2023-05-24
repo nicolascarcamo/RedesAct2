@@ -1,10 +1,15 @@
+import random
 import socket
+
+HEADER_SIZE = 18
+NEW_SERVER_ADDRESS = ('localhost', 8001)
 
 class SocketTCP:
     def __init__(self):
         self.address = None
         self.port = None
         self.sock = None
+        self.seq = "000"
         
     def set_address(self, address):
         self.address = address
@@ -18,10 +23,13 @@ class SocketTCP:
         #Create an UDP socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    def bind_socket(self):
+    #bind_socket function will be used by the server to bind the socket to the given address
+    def bind_socket(self, address=None):
         if self.sock is None:
             raise Exception("Socket not initialized")
-        self.sock.bind((self.address, self.port))
+        if address is None:
+            address = (self.address, self.port)
+        self.sock.bind(address)
 
     def listen_socket(self):
         if self.sock is None:
@@ -43,29 +51,108 @@ class SocketTCP:
             raise Exception("Socket not initialized")
         self.sock.sendto(message.encode(), address)
 
-    #Connect function will be used by the client to connect to the server
-    def connect(self):
-        if self.sock is None:
-            raise Exception("Socket not initialized")
-        self.sock.connect((self.address, self.port))
+    #Connect function will be used by the client to connect to the server to implement the three-way handshake
+    #The client will send a SYN segment to the server
+    #The server will respond with a SYN-ACK segment
+    #The client will respond with an ACK segment
+    def connect(self, address):
+        print("Connecting to server using three-way handshake")
+        #Generate a random sequence number between 0    and 100, using string format to pad the number with zeros
+        self.seq = "{:03d}".format(random.randint(0, 100))
+        #Create a segment with SYN header and the sequence number
+        segment = self.create_segment([1, 0, 0], self.seq, "")
+        #Send the segment to the server
+        self.send_to(address, segment)
+        #Wait for a response from the server (SYN-ACK segment), with HEADER_SIZE bytes, since the segment will not contain any data
+        whole_data, response_address = self.recieve(HEADER_SIZE)
+        #Parse the segment
+        header, server_seq, data = self.parse_segment(whole_data.decode())
+        #If the segment is a SYN-ACK segment, and check if the sequence number is one more than the client sequence number
+        if header[0] == "1" and header[1] == "1" and header[2] == "0" and server_seq == "{:03d}".format(int(self.seq) + 1):
+            print("Received SYN-ACK segment from server")
+            #Increment the sequence number by 1
+            self.seq = "{:03d}".format(int(server_seq) + 1)
+            #Create a segment with ACK header and the sequence number
+            segment = self.create_segment([0, 1, 0], self.seq, "")
+            #Send the segment to the server
+            self.send_to(response_address, segment)
+            #Return address
+            return response_address
+        else:
+            raise Exception("Connection failed")
+    #accept function will be used by the server to accept a connection from the client
+    #The server will wait for a SYN segment from the client
+    #The server will respond with a SYN-ACK segment
+    #The client will respond with an ACK segment
+    def accept(self):
+        #Wait for a SYN segment from the client, with HEADER_SIZE bytes, since the segment will not contain any data
+        whole_data, client_address = self.recieve(HEADER_SIZE)
+        #Parse the segment
+        header, client_seq, data = self.parse_segment(whole_data.decode())
+        #Update the sequence number
+        self.seq = client_seq
+        #If the segment is a SYN segment, send a SYN-ACK segment
+        if header[0] == "1" and header[1] == "0" and header[2] == "0":
+            print("Accepting connection from client")
+            #Increment the sequence number by 1
+            self.seq = "{:03d}".format(int(client_seq) + 1)
+            #Create a segment with SYN-ACK header and the sequence number
+            segment = self.create_segment([1, 1, 0], self.seq, "")
+            #Create a new TCP object to communicate with the client
+            new_tcp = SocketTCP()
+            #Set the address and port of the new TCP object using SERVER_ADDRESS
+            new_tcp.set_address(NEW_SERVER_ADDRESS[0])
+            new_tcp.set_port(NEW_SERVER_ADDRESS[1])
+            new_tcp.seq = self.seq
+            new_tcp.init_socket()
+            #Bind the socket to the client address
+            new_tcp.bind_socket(NEW_SERVER_ADDRESS)
+            #Send the segment to the client
+            new_tcp.send_to(client_address, segment)
+            #Wait for a response from the client (ACK segment)
+            whole_data, new_address = new_tcp.recieve(HEADER_SIZE)
+            #Parse the segment
+            last_header, new_client_seq, data = self.parse_segment(whole_data.decode())
+            #If the segment is an ACK segment, and check if the sequence number is one more than the server sequence number
+            #If the sequence number is correct, return the TCP object
+            if last_header[0] == "0" and last_header[1] == "1" and last_header[2] == "0" and new_client_seq == "{:03d}".format(int(self.seq) + 1):
+                print("ACK segment received from client")
+                #Update the sequence number 
+                new_tcp.seq = new_client_seq
+                return new_tcp, (new_tcp.address, new_tcp.port)
+            else:
+                raise Exception("Connection failed at last step")
+        else:
+            raise Exception("Connection failed")
+            
+    '''
+    Resume what we've done so far:
+    - We've created a SocketTCP class which will be used to communicate through TCP
+    - We've created a connect function which will be used by the client to connect to the server to implement the three-way handshake
+    - We've created an accept function which will be used by the server to accept a connection from the client
+    - We've created a send_to function which will be used to send data to a given address
+    - We've created a recieve function which will be used to recieve data from a given address
+    - We've created a bind_socket function which will be used to bind the socket to a given address
+    - We've created a listen_socket function which will be used to listen for connections
+    - We've created a close_socket function which will be used to close the socket
+    - We've created a set_address function which will be used to set the address
+    - We've created a set_port function which will be used to set the port
+    - We've created a init_socket function which will be used to initialize the socket
+    - We've created a parse_segment function which will be used to parse a segment into a data structure
+    - We've created a create_segment function which will be used to create a segment from a data structure
+
+    We still need to test the code to see if it works
+
+    Next up, we'll implement Stop-and-Wait ARQ using a timeout mechanism, using settimeout and setblocking functions
+
+    '''       
+
     #Info sent through TCP class will include TCP-type headers such as "ACK", "SYN", "FIN" or "SEQ"
     #We'll create "parse_segment" function to parse these headers into a data structure
     #We'll also create "create_segment" function to create a segment from a data structure
 
     #Parse a segment into a data structure
-    #Segment is a string which contains the header, the sequence number and the data
-    #Headers are signaled through binary numbers
-    #These is an example of how headers will be included 
-    #[SYN]|||[ACK]|||[FIN]|||[SEQ]|||[DATA]
-    #Where 1 signals the header is included and 0 signals the header is not included
-    #For example, if we want to send a segment with SYN and SEQ headers, we'll have to send a segment like this:
-    #1|||0|||0|||0|||001|||Hello
-    #Where 1|||0|||0|||001|||Hello is the segment
-    #1 is the SYN header
-    #0 is the ACK header
-    #0 is the FIN header
-    #001 is the sequence number
-    #Hello is the data
+
     def parse_segment(self, segment):
         #Get the header
         split_segment = segment.split("|||")
@@ -99,28 +186,3 @@ class SocketTCP:
 
         #Return the segment
         return segment
-    
-    #iterate_seq function will iterate the sequence number
-    #The sequence number will be a string of 3 digits
-    #The sequence should start at 001 and end at 100
-    #Create a function that receives a sequence number and returns the next sequence number
-    def iterate_seq(self, seq):
-        #Convert the sequence number to an integer
-        seq = int(seq)
-        #Add 1 to the sequence number
-        seq += 1
-        #Convert the sequence number to a string
-        seq = str(seq)
-        #Add zeros to the sequence number until it has 3 digits
-        while len(seq) < 3:
-            seq = "0" + seq
-        #Return the sequence number
-        return seq
-
-    #La idea es que el cliente envie un mensaje al servidor, donde la primera parte del mensaje sea el header, la segunda parte sea el numero de secuencia y la tercera parte sea el mensaje
-    #El servidor recibe el mensaje y lo imprime en pantalla
-    #Para hacer esto, tenemos que añadirle a cada mensaje sus headers respectivos, y utilizar parse y create segment para enviar y recibir los mensajes
-    #El cliente envia un mensaje con el header "SYN", el numero de secuencia "000" y el mensaje "Hello"
-    #El servidor recibe el mensaje y lo imprime en pantalla
-    #El servidor envia un mensaje con el header "ACK", el numero de secuencia "001" y el mensaje "Hello"
-    #El cliente recibe el mensaje y lo imprime en pantalla
