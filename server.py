@@ -1,58 +1,31 @@
 import socket
-import tcp_class
+import SocketTCP
 
 HEADER_SIZE = 18
 BYTES_TO_RECEIVE = 16
 TOTAL_BYTES = HEADER_SIZE + BYTES_TO_RECEIVE
 ADDRESS = 'localhost'
 INITIAL_PORT = 8000
+FULL_ADDRESS = (ADDRESS, INITIAL_PORT)
 
-#Create a TCP object to establish a connection with the client
-initial_tcp = tcp_class.SocketTCP()
+# SERVER
+initial_tcp = SocketTCP.SocketTCP()
+initial_tcp.bind(FULL_ADDRESS)
+connection_socketTCP, new_address = initial_tcp.accept()
 
-#Set the address and port
-initial_tcp.set_address(ADDRESS)
-initial_tcp.set_port(INITIAL_PORT)
+# test 1
+buff_size = 16+HEADER_SIZE
+full_message = connection_socketTCP.recv(buff_size)
+print("Test 1 received:", full_message)
+if full_message == "Mensje de len=16": print("Test 1: Passed")
+else: print("Test 1: Failed")
 
-#Initialize the socket
-initial_tcp.init_socket()
+# test 2
+buff_size = 19+HEADER_SIZE
+full_message = connection_socketTCP.recv(buff_size)
+print("Test 2 received:", full_message)
+if full_message == "Mensaje de largo 19": print("Test 2: Passed")
+else: print("Test 2: Failed")
 
-#Bind the socket
-initial_tcp.bind_socket()
-
-print('starting up on {} port {}'.format(initial_tcp.address, initial_tcp.port))
-
-#Use the accept function to accept a connection from the client from the three-way handshake
-tcp, new_address = initial_tcp.accept()
-print('accepted connection and listening at {} port {}'.format(new_address[0], new_address[1]))
-
-
-#Client will send a file to the server in chunks of 16 bytes
-#The server will receive the file and print it to standard output
-while True:
-
-    #Wait for a connection
-    print('waiting for packet...')
-
-    #Receive data from the client
-    whole_data, address = tcp.recieve(TOTAL_BYTES)
-
-    #Parse the segment
-    header, seq, data = tcp.parse_segment(whole_data.decode())
-    print(header, seq, data)
-    print('------------------')
-    if data:
-        print('received {} bytes from {}'.format(len(whole_data), (tcp.address, tcp.port)))
-        #Create a segment with ACK header with the sequence number of the received segment using the "create_segment" function
-        segment = tcp.create_segment([0, 1, 0], seq, "")
-
-        #Acknowledge the client
-        tcp.sock.sendto(segment.encode(), address)
-        print('sent {} bytes back to {}'.format(len(segment), ADDRESS))
-        
-    
-    #If the client sends an empty message, the server will close the socket
-    if not data:
-        print('closing socket')
-        tcp.close_socket()
-        break
+# test recv_close function
+connection_socketTCP.recv_close()
