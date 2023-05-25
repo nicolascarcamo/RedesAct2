@@ -341,6 +341,7 @@ class SocketTCP:
         self.sock.settimeout(None)
         #Close the socket
         self.sock.close()
+        print("Connection closed from client side")
         #Return
         return
     
@@ -399,5 +400,6 @@ class SocketTCP:
         self.sock.settimeout(None)
         #Close the socket
         self.sock.close()
+        print("Connection closed from server side")
         #Return
         return
