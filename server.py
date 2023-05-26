@@ -36,4 +36,4 @@ if (message_part_1 + message_part_2) == "Mensaje de largo 19": print("Test 3: Pa
 else: print("Test 3: Failed")
 
 # test recv_close function
-#connection_socketTCP.recv_close()
+connection_socketTCP.recv_close()

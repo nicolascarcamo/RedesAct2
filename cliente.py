@@ -25,4 +25,4 @@ message = "Mensaje de largo 19"
 client_socketTCP.send(message)
 
 # test close function
-#client_socketTCP.close()
+client_socketTCP.close()
