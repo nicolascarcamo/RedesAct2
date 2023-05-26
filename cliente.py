@@ -20,6 +20,9 @@ client_socketTCP.send(message)
 # test 2
 message = "Mensaje de largo 19"
 client_socketTCP.send(message)
+# test 3
+message = "Mensaje de largo 19"
+client_socketTCP.send(message)
 
 # test close function
-client_socketTCP.close()
+#client_socketTCP.close()

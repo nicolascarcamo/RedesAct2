@@ -15,7 +15,11 @@ class SocketTCP:
         self.message_length = 0
         #Message buffer
         self.message = ""
+        self.whole_message = ""
+        self.message_segments = []
         
+        
+
     def set_address(self, address):
         self.address = address
 
@@ -231,27 +235,18 @@ class SocketTCP:
 
 
     #We'll create a recv(size) function which will be used to receive a message from the other side
-    #The function will implement timeout and retransmission
-    #The function will first receive the size of the message
-    #Then it will receive the message itself
-    #It will wait for a segment from the sender and return once min(size, len(message)) bytes are received
-    #While len(message) > size, recv function should be able to be called multiple times to receive the whole message
-    #To achieve this, we'll create a "message" variable which will be used to store the message
-    #We'll also create a "message_size" variable which will be used to store the size of the message
-    #We'll also create a "message_received" variable which will be used to store the number of bytes received
-    def recv(self, size):
+    def recv(self, buff_size):
+        # si tenia un timeout activo en el objeto, lo desactivo
+        self.sock.settimeout(None)
         #If self.message_length is 0, then we'll receive the size of the message
         if self.message_length == 0:
             #Receive the size of the message from the sender
             #No timeout is needed here
-            whole_data, client_address = self.recieve(size)
+            whole_data, client_address = self.recieve(24)
             #Parse the segment
-            print("whole_data: ", whole_data)
-            print("client_address: ", client_address)
             header, seq, data = self.parse_segment(whole_data.decode())
-            print("message size: ", data)
             #Get the size of the message 
-            self.message_size = int(data)
+            self.message_length = int(data)
             self.message = ""
             #Send an ACK segment to the sender
             #Increment the sequence number by 1
@@ -263,11 +258,10 @@ class SocketTCP:
         #Receive the message from the sender
         #Begin timeout
         self.sock.settimeout(5)
-        #While len(self.message) < self.message_size, receive segments from the sender
-        while len(self.message) < self.message_size:
+        while len(self.whole_message) < self.message_length:
             try:
                 #Receive a segment from the sender
-                whole_data, client_address = self.recieve(size)
+                whole_data, client_address = self.recieve(1024)
                 #Parse the segment
                 header, seq, data = self.parse_segment(whole_data.decode())
                 #Check if the segment is a data segment and if the sequence number is one more than the previous sequence number
@@ -276,7 +270,7 @@ class SocketTCP:
                     #Increment the sequence number by 1
                     self.seq = "{:03d}".format(int(seq) + 1)
                     #Append the data to the message
-                    self.message += data
+                    self.whole_message += data
                     #Send an ACK segment to the sender
                     #Create an ACK segment
                     ack_segment = self.create_segment([0, 1, 0], self.seq, "")
@@ -284,6 +278,9 @@ class SocketTCP:
                     self.send_to(client_address, ack_segment)
                 else:
                     raise Exception("Connection failed")
+                #Divide the message into segments of buff_size
+                self.message_segments = [self.whole_message[i:i+buff_size] for i in range(0, len(self.whole_message), buff_size)]
+
             except socket.timeout:
                 print("Timeout occured, resending ACK segment")
                 #Send an ACK segment to the sender
@@ -291,11 +288,36 @@ class SocketTCP:
                 ack_segment = self.create_segment([0, 1, 0], self.seq, "")
                 #Send the ACK segment to the sender
                 self.send_to(client_address, ack_segment)
+        #If we have received the whole message, we can now return the message
+        #We're going to assign the message to a variable called "message"
+        #Message will be the first element of message_segments
+        #We'll also remove the message from message_segments
+        #We're going to repeat this process until message_segments is empty
+        self.message = self.message_segments[0]
+        self.message_segments.pop(0)
+
+        if len(self.message_segments) == 0:
+            self.whole_message = ""
+            self.message_length = 0
+
         #End timeout
         self.sock.settimeout(None)
         #Return the message
         return self.message
     
+
+
+        # despues de recibir el message_length se continua con la recepcion
+
+
+#Aca en esta parte es para ver si podemos usar todo el mensaje sobrante o no
+#Luego de esto la idea es ver el caso donde ya no podemos seguir recibiendo (pues ya recibimos todo el mensaje)
+#Si sucede eso, tenemos que seguir quitando del mensaje auxiliar hasta que podamos enviar todo el mensaje
+#
+#Go Back N -> send -> selective repeat, recv -> Stop and Wait
+#
+
+
     #Now we'll implement end of connection
     #We'll create a close() function which will be used to end the connection
     #close() function will send a FIN segment to the other side
