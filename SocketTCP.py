@@ -342,11 +342,6 @@ class SocketTCP:
         self.sock.settimeout(None)
         #Return the message
         return self.message
-    
-
-
-        # despues de recibir el message_length se continua con la recepcion
-
 
     #Now we'll implement end of connection
     #We'll create a close() function which will be used to end the connection
