@@ -168,6 +168,8 @@ class SocketTCP:
                     raise Exception("Connection failed")
             except socket.timeout:
                 print("Timeout, retrying")
+                #reset timeout
+                self.sock.settimeout(5)
         #reset timeout
         self.sock.settimeout(5)
         while True:
@@ -193,7 +195,8 @@ class SocketTCP:
                     raise Exception("Connection failed at last step")
             except socket.timeout:
                 print("Timeout, retrying")
-                continue
+                #reset timeout
+                self.sock.settimeout(5)
                             
     #We'll create a send(message) function which will be used to send a message to the other side
     #The function will implement timeout and retransmission
@@ -232,6 +235,8 @@ class SocketTCP:
                     raise Exception("Connection failed")
             except socket.timeout:
                 print("Timeout occured, resending size of message")
+                #reset timeout
+                self.sock.settimeout(5)
         #Send the message to the receiver
         #Split the message into segments of maximum size 16 bytes
         segments = [message[i:i+16] for i in range(0, len(message), 16)]
@@ -257,6 +262,8 @@ class SocketTCP:
                         raise Exception("Connection failed")
                 except socket.timeout:
                     print("Timeout occured, resending segment")
+                    #reset timeout
+                    self.sock.settimeout(5)
         #End timeout
         self.sock.settimeout(None)
         #Return
@@ -317,6 +324,8 @@ class SocketTCP:
                 ack_segment = self.create_segment([0, 1, 0], self.seq, "")
                 #Send the ACK segment to the sender
                 self.send_to(client_address, ack_segment)
+                #reset timeout
+                self.sock.settimeout(5)
         #If we have received the whole message, we can now return the message
         #We're going to assign the message to a variable called "message"
         #Message will be the first element of message_segments
