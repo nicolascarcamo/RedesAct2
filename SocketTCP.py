@@ -103,69 +103,98 @@ class SocketTCP:
         self.seq = "{:03d}".format(random.randint(0, 100))
         #Create a segment with SYN header and the sequence number
         segment = self.create_segment([1, 0, 0], self.seq, "")
-        #Send the segment to the server
-        self.send_to(address, segment)
-        #Wait for a response from the server (SYN-ACK segment), with HEADER_SIZE bytes, since the segment will not contain any data
-        whole_data, response_address = self.recieve(HEADER_SIZE)
-        #Parse the segment
-        header, server_seq, data = self.parse_segment(whole_data.decode())
-        #If the segment is a SYN-ACK segment, and check if the sequence number is one more than the client sequence number
-        if header[0] == "1" and header[1] == "1" and header[2] == "0" and server_seq == "{:03d}".format(int(self.seq) + 1):
-            print("Received SYN-ACK segment from server")
-            #Increment the sequence number by 1
-            self.seq = "{:03d}".format(int(server_seq) + 1)
-            #Create a segment with ACK header and the sequence number
-            segment = self.create_segment([0, 1, 0], self.seq, "")
-            #Send the segment to the server
-            self.send_to(response_address, segment)
-            #Return address
-            return response_address
-        else:
-            raise Exception("Connection failed")
+        #Begin timeout
+        self.sock.settimeout(5)
+        while True:
+                try:
+                    #Send the segment to the server
+                    self.send_to(address, segment)
+                    
+                    #Wait for a response from the server (SYN-ACK segment), with HEADER_SIZE bytes, since the segment will not contain any data
+                    whole_data, response_address = self.recieve(HEADER_SIZE)
+                    #Parse the segment
+                    header, server_seq, data = self.parse_segment(whole_data.decode())
+                    #If the segment is a SYN-ACK segment, and check if the sequence number is one more than the client sequence number
+                    if header[0] == "1" and header[1] == "1" and header[2] == "0" and server_seq == "{:03d}".format(int(self.seq) + 1):
+                        print("Received SYN-ACK segment from server")
+                        #Increment the sequence number by 1
+                        self.seq = "{:03d}".format(int(server_seq) + 1)
+                        #Create a segment with ACK header and the sequence number
+                        segment = self.create_segment([0, 1, 0], self.seq, "")
+                        #Send the segment to the server
+                        self.send_to(response_address, segment)
+                        #Return address
+                        return response_address
+                    else:
+                        raise Exception("Connection failed")
+                except socket.timeout:
+                    print("Timeout, retrying")
+                    continue
+                    
     #accept function will be used by the server to accept a connection from the client
     #The server will wait for a SYN segment from the client
     #The server will respond with a SYN-ACK segment
     #The client will respond with an ACK segment
     def accept(self):
-        #Wait for a SYN segment from the client, with HEADER_SIZE bytes, since the segment will not contain any data
-        whole_data, client_address = self.recieve(HEADER_SIZE)
-        #Parse the segment
-        header, client_seq, data = self.parse_segment(whole_data.decode())
-        #Update the sequence number
-        self.seq = client_seq
-        #If the segment is a SYN segment, send a SYN-ACK segment
-        if header[0] == "1" and header[1] == "0" and header[2] == "0":
-            print("Accepting connection from client")
-            #Increment the sequence number by 1
-            self.seq = "{:03d}".format(int(client_seq) + 1)
-            #Create a segment with SYN-ACK header and the sequence number
-            segment = self.create_segment([1, 1, 0], self.seq, "")
-            #Create a new TCP object to communicate with the client
-            new_tcp = SocketTCP()
-            #Set the address and port of the new TCP object using SERVER_ADDRESS
-            new_tcp.set_address(NEW_SERVER_ADDRESS[0])
-            new_tcp.set_port(NEW_SERVER_ADDRESS[1])
-            new_tcp.seq = self.seq
-            #Bind the socket to the client address
-            new_tcp.bind(NEW_SERVER_ADDRESS)
-            #Send the segment to the client
-            new_tcp.send_to(client_address, segment)
-            #Wait for a response from the client (ACK segment)
-            whole_data, new_address = new_tcp.recieve(HEADER_SIZE)
-            #Parse the segment
-            last_header, new_client_seq, data = self.parse_segment(whole_data.decode())
-            #If the segment is an ACK segment, and check if the sequence number is one more than the server sequence number
-            #If the sequence number is correct, return the TCP object
-            if last_header[0] == "0" and last_header[1] == "1" and last_header[2] == "0" and new_client_seq == "{:03d}".format(int(self.seq) + 1):
-                print("ACK segment received from client")
-                #Update the sequence number 
-                new_tcp.seq = new_client_seq
-                return new_tcp, (new_tcp.address, new_tcp.port)
-            else:
-                raise Exception("Connection failed at last step")
-        else:
-            raise Exception("Connection failed")
-            
+        #Set timeout for packet loss implementation
+        self.sock.settimeout(5)
+        while True:
+            try:
+                #Wait for a SYN segment from the client, with HEADER_SIZE bytes, since the segment will not contain any data
+                whole_data, client_address = self.recieve(HEADER_SIZE)
+                #Parse the segment
+                header, client_seq, data = self.parse_segment(whole_data.decode())
+                #Update the sequence number
+                self.seq = client_seq
+                #If the segment is a SYN segment, send a SYN-ACK segment
+                if header[0] == "1" and header[1] == "0" and header[2] == "0":
+                    print("Accepting connection from client")
+                    #Increment the sequence number by 1
+                    self.seq = "{:03d}".format(int(client_seq) + 1)
+                    #Create a segment with SYN-ACK header and the sequence number
+                    segment = self.create_segment([1, 1, 0], self.seq, "")
+                    #Create a new TCP object to communicate with the client
+                    new_tcp = SocketTCP()
+                    #Set the address and port of the new TCP object using SERVER_ADDRESS
+                    new_tcp.set_address(NEW_SERVER_ADDRESS[0])
+                    new_tcp.set_port(NEW_SERVER_ADDRESS[1])
+                    new_tcp.seq = self.seq
+                    #Bind the socket to the client address
+                    new_tcp.bind(NEW_SERVER_ADDRESS)
+                    #Send the segment to the client
+                    new_tcp.send_to(client_address, segment)
+                    break
+                else:
+                    raise Exception("Connection failed")
+            except socket.timeout:
+                print("Timeout, retrying")
+        #reset timeout
+        self.sock.settimeout(5)
+        while True:
+            try:
+                #Wait for a response from the client (ACK segment)
+                whole_data, new_address = new_tcp.recieve(HEADER_SIZE)
+                #Parse the segment
+                last_header, new_client_seq, data = self.parse_segment(whole_data.decode())
+                #If the segment is an ACK segment, and check if the sequence number is one more than the server sequence number
+                #If the sequence number is correct, return the TCP object
+                if last_header[0] == "0" and last_header[1] == "1" and last_header[2] == "0" and new_client_seq == "{:03d}".format(int(self.seq) + 1):
+                    print("ACK segment received from client")
+                    #Update the sequence number 
+                    new_tcp.seq = new_client_seq
+                    return new_tcp, (new_tcp.address, new_tcp.port)
+                #elif we recieved instead a DATA segment which is meant to be message size, we return the TCP object nonetheless
+                elif last_header[0] == "0" and last_header[1] == "0" and last_header[2] == "0" and new_client_seq >= "{:03d}".format(int(self.seq) + 2):
+                    print("DATA segment received from client")
+                    #Update the sequence number 
+                    new_tcp.seq = new_client_seq
+                    return new_tcp, (new_tcp.address, new_tcp.port)
+                else:
+                    raise Exception("Connection failed at last step")
+            except socket.timeout:
+                print("Timeout, retrying")
+                continue
+                            
     #We'll create a send(message) function which will be used to send a message to the other side
     #The function will implement timeout and retransmission
     #The function will first send the receiver the size of the message
@@ -308,14 +337,6 @@ class SocketTCP:
 
 
         # despues de recibir el message_length se continua con la recepcion
-
-
-#Aca en esta parte es para ver si podemos usar todo el mensaje sobrante o no
-#Luego de esto la idea es ver el caso donde ya no podemos seguir recibiendo (pues ya recibimos todo el mensaje)
-#Si sucede eso, tenemos que seguir quitando del mensaje auxiliar hasta que podamos enviar todo el mensaje
-#
-#Go Back N -> send -> selective repeat, recv -> Stop and Wait
-#
 
 
     #Now we'll implement end of connection
