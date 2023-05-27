@@ -359,12 +359,12 @@ class SocketTCP:
         #Create a FIN segment
         fin_segment = self.create_segment([0, 0, 1], self.seq, "")
         #Send the FIN segment to the other side
-        self.send_to((self.address, int(self.port)), fin_segment)
         #Wait for a FIN-ACK segment from the other side
         #Begin timeout
         self.sock.settimeout(5)
         while True:
             try:
+                self.send_to((self.address, int(self.port)), fin_segment)
                 #Receive a segment from the other side
                 whole_data, sever_address = self.recieve(HEADER_SIZE)
                 #Parse the segment
@@ -379,14 +379,12 @@ class SocketTCP:
                     raise Exception("Connection failed")
             except socket.timeout:
                 print("Timeout occured, resending FIN segment")
-                #Send a FIN segment to the other side
-                #Create a FIN segment
-                fin_segment = self.create_segment([0, 0, 1], self.seq, "")
-                #Send the FIN segment to the other side
-                self.send_to((self.address, int(self.port)), fin_segment)
+                #reset timeout
+                self.sock.settimeout(5)
         #Send an ACK segment to the other side
         #Create an ACK segment
         ack_segment = self.create_segment([0, 1, 0], self.seq, "")
+
         #Send the ACK segment to the other side
         self.send_to((self.address, int(self.port)), ack_segment)
         #End timeout
@@ -422,6 +420,8 @@ class SocketTCP:
                     raise Exception("Connection failed")
             except socket.timeout:
                 print("Timeout occured, FIN segment not received")
+                #reset timeout
+                self.sock.settimeout(5)
         #End timeout
         self.sock.settimeout(None)
         #Send a FIN-ACK segment to the other side
@@ -432,6 +432,9 @@ class SocketTCP:
         #Wait for an ACK segment from the other side
         #Begin timeout
         self.sock.settimeout(5)
+        #timeout counter
+        counter = 0
+
         while True:
             try:
                 #Receive a segment from the other side
@@ -448,6 +451,12 @@ class SocketTCP:
                     raise Exception("Connection failed")
             except socket.timeout:
                 print("Timeout occured, ACK segment not received")
+                #reset timeout
+                self.sock.settimeout(5)
+                counter += 1
+                if counter == 3:
+                    print("Closing connection due to timeouts")
+                    break
         #End timeout
         self.sock.settimeout(None)
         #Close the socket
